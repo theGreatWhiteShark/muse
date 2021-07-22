@@ -97,8 +97,8 @@ namespace MusEGui {
 
 static const int MIN_TRACKHEIGHT = 20;
 //static const int WHEEL_DELTA = 120;
-QColor collist[] = { Qt::red, Qt::yellow, Qt::blue , Qt::black, Qt::white, Qt::green };
-QString colnames[] = { "Red", "Yellow", "Blue", "Black", "White", "Green"};
+	QColor collist[] = { QColor( 244, 173, 41 ), QColor( 221, 221, 221 ), QColor( 118, 196, 252 ), QColor( 247, 252, 118 ), QColor( 181, 252, 118 ) , QColor( 211, 159, 252 ) };
+QString colnames[] = { "Orange", "Gray", "Blue", "Yellow", "Green", "Violet"};
 enum { AUTO_INVALID = -1, AUTO_SHOW_ALL = 251, AUTO_HIDE_ALL = 252, AUTO_CLEAR_AUTO = 253, AUTO_CLEAR_MIDI = 254, AUTO_MIDI_ASSIGN = 255 };
 
 //---------------------------------------------------------

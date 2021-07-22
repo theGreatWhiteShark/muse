@@ -42,6 +42,9 @@
 #include <QDrag>
 #include <QStringList>
 #include <QInputDialog>
+#include <QGridLayout>
+#include <QGroupBox>
+#include <QLabel>
 
 #include "muse_math.h"
 #include "fastlog.h"
@@ -105,9 +108,15 @@ using std::set;
 
 namespace MusEGui {
 
-const int PartCanvas::_automationPointDetectDist = 4;
+const int PartCanvas::_automationPointDetectDist = 8;
 const int PartCanvas::_automationPointWidthUnsel = 4;
 const int PartCanvas::_automationPointWidthSel = 6;
+
+
+void AutomationObject::setCurrentText( const QString& parameter, int frame, double value ) {
+	currentText = QString( "Param: %1 \t Frame: %2 \t Value: %3" ).arg( parameter )
+		.arg( frame ).arg( value, 0, 'g', 3 );
+}
 
 //---------------------------------------------------------
 //   NPart
@@ -259,86 +268,154 @@ void PartCanvas::returnPressed()
 //---------------------------------------------------------
 
 void PartCanvas::viewMouseDoubleClickEvent(QMouseEvent* event)
-      {
-      if (_tool != PointerTool) {
+{
+      if (_tool != PointerTool && _tool != AutomationTool ) {
             viewMousePressEvent(event);
             return;
-            }
-      QPoint cpos = event->pos();
-      curItem     = items.find(cpos);
-      bool ctrl  = event->modifiers() & Qt::ControlModifier;
-      bool alt = event->modifiers() & Qt::AltModifier;
-      if (curItem) {
-          if ((event->button() == Qt::LeftButton) && ctrl && alt) {
-              deselectAll();
-              selectItem(curItem, true);
-              emit dclickPart(((NPart*)(curItem))->track());
-          }
-          else if ((event->button() == Qt::LeftButton) && ctrl) {
+      }
+
+      if ( _tool == AutomationTool ) {
+	  /// PHIL: custom code to enable editing both the position and
+	  // the value of an automation vertex using a line edit.
+
+	  // Get the selected track.
+	  MusECore::TrackList* tl = MusEGlobal::song->tracks();
+	  MusECore::ciTrack it;
+	  int yy = 0;
+	  int y = event->y();
+	  for (it = tl->begin(); it != tl->end(); ++it) {
+	      int h = (*it)->height();
+	      if (y >= yy && y < (yy + h) && (*it)->isVisible())
+		  break;
+	      yy += h;
+	  }
+	  if (pos[2] - pos[1] > 0 && it != tl->end()) {
+	      qDebug() << "in if";
+	      MusECore::Track* track = *it;
+	      if ( track->type() == MusECore::Track::MIDI ||
+		   track->type() == MusECore::Track::DRUM ) {
+		  return;
+	      }
+
+	      // Check whether an automation vertex is within the
+	      // allowed range to the mouse pointer.
+	      checkAutomation( track, event->pos(), true );
+
+	      if ( automation.currentCtrlValid ) {
+
+			  int oldFrame = automation.currentCtrlFrameList[ 0 ];
+			  double oldValue = automation.currentCtrlList->value( oldFrame );
+			  double minValue, maxValue;
+			  automation.currentCtrlList->range( &minValue, &maxValue );
+
+			  double stepSize = 0.05;
+			  if( automation.currentCtrlList->valueType() == MusECore::VAL_LOG ) {
+				  oldValue = muse_val2dbr( oldValue );
+				  minValue = muse_val2dbr( minValue );
+				  maxValue = muse_val2dbr( maxValue );
+				  stepSize = 0.5;
+			  }
+
+			  AutomationAdjustmentDialog* pDialog = new AutomationAdjustmentDialog( this, oldValue, oldFrame, minValue, maxValue, stepSize );
+			  pDialog->exec();
+
+			  double newValue = pDialog->getValue();
+			  double newFrame = pDialog->getFrame();
+
+			  automation.setCurrentText( automation.currentCtrlList->name(), newFrame, newValue );
+
+			  if( automation.currentCtrlList->valueType() == MusECore::VAL_LOG ) {
+				  newValue = muse_db2val( newValue );
+			  }
+		  
+			  Undo operations;
+			  operations.push_back(UndoOp(UndoOp::ModifyAudioCtrlVal, automation.currentTrack, automation.currentCtrlList->id(),
+										  oldFrame, newFrame, oldValue, newValue));
+			  operations.combobreaker = automation.breakUndoCombo;
+			  MusEGlobal::song->applyOperationGroup(operations);
+
+			  delete pDialog;
+
+			  controllerChanged(automation.currentTrack, automation.currentCtrlList->id());
+	      }
+	  }
+      } else {
+	  QPoint cpos = event->pos();
+	  curItem     = items.find(cpos);
+	  bool ctrl  = event->modifiers() & Qt::ControlModifier;
+	  bool alt = event->modifiers() & Qt::AltModifier;
+	  if (curItem) {
+	      if ((event->button() == Qt::LeftButton) && ctrl && alt) {
+		  deselectAll();
+		  selectItem(curItem, true);
+		  emit dclickPart(((NPart*)(curItem))->track());
+	      }
+	      else if ((event->button() == Qt::LeftButton) && ctrl) {
                   editPart = (NPart*)curItem;
                   QRect r = map(curItem->bbox());
                   if (lineEditor == nullptr) {
-                        lineEditor = new QLineEdit(this);
-                        lineEditor->setFrame(true);
-                        connect(lineEditor, SIGNAL(editingFinished()),SLOT(returnPressed()));
-                        }
+		      lineEditor = new QLineEdit(this);
+		      lineEditor->setFrame(true);
+		      connect(lineEditor, SIGNAL(editingFinished()),SLOT(returnPressed()));
+		  }
                   editMode = true;
                   lineEditor->setGeometry(r);
                   lineEditor->setText(editPart->name());
                   lineEditor->setFocus();
                   lineEditor->show();
-                  }
-            else if (event->button() == Qt::LeftButton) {
+	      }
+	      else if (event->button() == Qt::LeftButton) {
                   deselectAll();
                   selectItem(curItem, true);
                   emit dclickPart(((NPart*)(curItem))->track());
-                  }
-            }
+	      }
+	  }
 
-      // double click creates new part between left and
-      // right mark
+	  // double click creates new part between left and
+	  // right mark
 
-      else {
-            MusECore::TrackList* tl = MusEGlobal::song->tracks();
-            MusECore::ciTrack it;
-            int yy = 0;
-            int y = event->y();
-            for (it = tl->begin(); it != tl->end(); ++it) {
+	  else {
+	      MusECore::TrackList* tl = MusEGlobal::song->tracks();
+	      MusECore::ciTrack it;
+	      int yy = 0;
+	      int y = event->y();
+	      for (it = tl->begin(); it != tl->end(); ++it) {
                   int h = (*it)->height();
                   if (y >= yy && y < (yy + h) && (*it)->isVisible())
-                        break;
+		      break;
                   yy += h;
-                  }
-            if (pos[2] - pos[1] > 0 && it != tl->end()) {
+	      }
+	      if (pos[2] - pos[1] > 0 && it != tl->end()) {
                   MusECore::Track* track = *it;
                   switch(track->type()) {
-                        case MusECore::Track::MIDI:
-                        case MusECore::Track::DRUM:
-                              {
-                              MusECore::MidiPart* part = new MusECore::MidiPart((MusECore::MidiTrack*)track);
-                              part->setTick(pos[1]);
-                              part->setLenTick(pos[2]-pos[1]);
-                              part->setName(track->name());
-                              NPart* np = new NPart(part);
-                              items.add(np);
-                              deselectAll();
-                              part->setSelected(true);
-                              np->setSelected(true);
-                              part->setColorIndex(curColorIndex);
-                              MusEGlobal::song->applyOperation(MusECore::UndoOp(MusECore::UndoOp::AddPart, part));
-                              }
-                              break;
-                        case MusECore::Track::WAVE:
-                        case MusECore::Track::AUDIO_OUTPUT:
-                        case MusECore::Track::AUDIO_INPUT:
-                        case MusECore::Track::AUDIO_GROUP:
-                        case MusECore::Track::AUDIO_AUX:
-                        case MusECore::Track::AUDIO_SOFTSYNTH:
-                              break;
-                        }
-                  }
-            }
+		  case MusECore::Track::MIDI:
+		  case MusECore::Track::DRUM:
+		      {
+			  MusECore::MidiPart* part = new MusECore::MidiPart((MusECore::MidiTrack*)track);
+			  part->setTick(pos[1]);
+			  part->setLenTick(pos[2]-pos[1]);
+			  part->setName(track->name());
+			  NPart* np = new NPart(part);
+			  items.add(np);
+			  deselectAll();
+			  part->setSelected(true);
+			  np->setSelected(true);
+			  part->setColorIndex(curColorIndex);
+			  MusEGlobal::song->applyOperation(MusECore::UndoOp(MusECore::UndoOp::AddPart, part));
+		      }
+		      break;
+		  case MusECore::Track::WAVE:
+		  case MusECore::Track::AUDIO_OUTPUT:
+		  case MusECore::Track::AUDIO_INPUT:
+		  case MusECore::Track::AUDIO_GROUP:
+		  case MusECore::Track::AUDIO_AUX:
+		  case MusECore::Track::AUDIO_SOFTSYNTH:
+		      break;
+		  }
+	      }
+	  }
       }
+}
 
 //---------------------------------------------------------
 //   moveCanvasItems
@@ -4684,7 +4761,7 @@ void PartCanvas::checkAutomation(MusECore::Track * t, const QPoint &pointer, boo
     if(closest_point_cl->valueType() == MusECore::VAL_LOG)
       //closest_point_value = MusECore::fast_log10(closest_point_value) * 20.0;
       closest_point_value = muse_val2dbr(closest_point_value); // Here we can use the slower but accurate function.
-    automation.currentText = QString("Param:%1 Value:%2").arg(closest_point_cl->name()).arg(closest_point_value, 0, 'g', 3);
+    automation.setCurrentText(closest_point_cl->name(),closest_point_frame, closest_point_value );
 
 // FIXME These are attempts to update only the necessary rectangles. No time for it ATM, not much choice but to do full update.
 #if 0
@@ -4702,7 +4779,7 @@ void PartCanvas::checkAutomation(MusECore::Track * t, const QPoint &pointer, boo
     if(closest_point_cl->valueType() == MusECore::VAL_LOG)
       //closest_point_value = MusECore::fast_log10(closest_point_value) * 20.0;
       value = muse_val2dbr(value); // Here we can use the slower but accurate function.
-    automation.currentText = QString("Param:%1 Frame:%2 Value:%3").arg(closest_point_cl->name()).arg(closest_point_frame).arg(value);
+    automation.setCurrentText( closest_point_cl->name(), closest_point_frame, value);
 //     automation.currentTextRect = fontMetrics().boundingRect(automation.currentText).adjusted(-4, -2, 4, 2);
     automation.currentTextRect = fontMetrics().boundingRect(automation.currentText).adjusted(0, 0, 4, 4);
 //     automation.currentTextRect.moveLeft(closest_point_x + 20);
@@ -4841,10 +4918,10 @@ void PartCanvas::processAutomationMovements(QPoint inPos, bool slowMotion)
 
   // Store the text.
   double displayCvVal =  cvval;
+
+  int new_frame = 1;
   if(automation.currentCtrlList->valueType() == MusECore::VAL_LOG)
     displayCvVal = muse_val2dbr(cvval);
-
-  automation.currentText = QString("Param:%1 Value:%2").arg(automation.currentCtrlList->name()).arg(displayCvVal, 0, 'g', 3);
 
   const int fl_sz = automation.currentCtrlFrameList.size();
   for(int i = 0; i < fl_sz; ++i)
@@ -4894,7 +4971,7 @@ void PartCanvas::processAutomationMovements(QPoint inPos, bool slowMotion)
         ++next_frame_offset;
       }
 
-      int new_frame = old_frame + delta_frame;
+      new_frame = old_frame + delta_frame;
       if(new_frame < min_prev_frame)
         new_frame = min_prev_frame;
       if(max_next_frame != -1 && new_frame > max_next_frame)
@@ -4907,6 +4984,8 @@ void PartCanvas::processAutomationMovements(QPoint inPos, bool slowMotion)
       //}
     }
   }
+  automation.setCurrentText( automation.currentCtrlList->name(), new_frame, displayCvVal);
+
 
   automation.startMovePoint = inPos;
   if(!operations.empty())
@@ -4936,7 +5015,7 @@ void PartCanvas::newAutomationVertex(QPoint pos)
   double displayCvVal =  cvval;
   if(automation.currentCtrlList->valueType() == MusECore::VAL_LOG)
     displayCvVal = muse_val2dbr(cvval);
-  automation.currentText = QString("Param:%1 Value:%2").arg(automation.currentCtrlList->name()).arg(displayCvVal, 0, 'g', 3);
+  automation.setCurrentText( automation.currentCtrlList->name(), frame, displayCvVal );
 
   Undo operations;
   operations.push_back(UndoOp(UndoOp::AddAudioCtrlVal, automation.currentTrack, automation.currentCtrlList->id(), frame, cvval));
@@ -5061,6 +5140,75 @@ void PartCanvas::setRangeToSelection() {
 int PartCanvas::currentPartColorIndex() const
 {
   return curColorIndex;
+}
+
+AutomationAdjustmentDialog::AutomationAdjustmentDialog( QWidget* pParent, double value, int frame, double minValue, double maxValue, double stepSize ) :
+	QDialog( pParent ) {
+
+	setWindowTitle( "Edit automation vertex" );
+	setModal( true );
+
+	QVBoxLayout* pMainLayout = new QVBoxLayout;
+		
+	QGroupBox* pGridBox = new QGroupBox( "Edit automation vertex" );
+	QGridLayout* pGridLayout = new QGridLayout;
+	pGridBox->setLayout( pGridLayout );
+
+	QLabel* pFramePositionLabel = new QLabel( "Frame position" );
+	pGridLayout->addWidget( pFramePositionLabel, 0, 0 );
+	m_pFrameSpinBox = new ADDSpinBox( this );
+	m_pFrameSpinBox->setMinimum( 1 );
+	m_pFrameSpinBox->setMaximum( 2147483647 );
+	m_pFrameSpinBox->setValue( frame );
+		
+	pGridLayout->addWidget( m_pFrameSpinBox, 0, 1 );
+
+	QLabel* pValueLabel = new QLabel( "Value" );
+	pGridLayout->addWidget( pValueLabel, 1, 0 );
+	m_pValueDoubleSpinBox = new ADDDoubleSpinBox( this );
+	m_pValueDoubleSpinBox->setMinimum( minValue );
+	m_pValueDoubleSpinBox->setMaximum( maxValue );
+	m_pValueDoubleSpinBox->setValue( value );
+	m_pValueDoubleSpinBox->setDecimals( 5 );
+	m_pValueDoubleSpinBox->setSingleStep( stepSize );
+	pGridLayout->addWidget( m_pValueDoubleSpinBox, 1, 1 );
+
+	pMainLayout->addWidget( pGridBox );
+	setLayout( pMainLayout );
+
+	m_pValueDoubleSpinBox->setFocus();
+	connect( m_pFrameSpinBox, SIGNAL( returnPressed() ), this, SLOT( accept() ) );
+	connect( m_pValueDoubleSpinBox, SIGNAL( returnPressed() ), this, SLOT( accept() ) );
+}
+	
+AutomationAdjustmentDialog::~AutomationAdjustmentDialog() {
+}
+	
+
+ADDSpinBox::ADDSpinBox( QWidget* pParent ) :
+	QSpinBox( pParent ) {
+}
+ADDSpinBox::~ADDSpinBox() {
+}
+
+void ADDSpinBox::keyPressEvent( QKeyEvent* ev ) {
+	if ( ev->key() == Qt::Key_Return ) {
+		emit returnPressed();
+	}
+	QSpinBox::keyPressEvent( ev );
+}
+
+ADDDoubleSpinBox::ADDDoubleSpinBox( QWidget* pParent ) :
+	QDoubleSpinBox( pParent ) {
+}
+ADDDoubleSpinBox::~ADDDoubleSpinBox() {
+}
+
+void ADDDoubleSpinBox::keyPressEvent( QKeyEvent* ev ) {
+	if ( ev->key() == Qt::Key_Return ) {
+		emit returnPressed();
+	}
+	QDoubleSpinBox::keyPressEvent( ev );
 }
 
 } // namespace MusEGui

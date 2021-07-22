@@ -44,7 +44,7 @@ namespace MusECore {
 
 void CtrlList::initColor(int i)
 {
-  QColor collist[] = { Qt::red, Qt::yellow, Qt::blue , Qt::black, Qt::white, Qt::green };
+	QColor collist[] = { QColor( 244, 173, 41 ), QColor( 221, 221, 221 ), QColor( 118, 196, 252 ), QColor( 247, 252, 118 ), QColor( 181, 252, 118 ) , QColor( 211, 159, 252 ) };
 
   if (i < 6)
     _displayColor = collist[i%6];

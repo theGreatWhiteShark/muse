@@ -29,6 +29,11 @@
 #include <QElapsedTimer>
 #include <QList>
 
+#include <QDialog>
+#include <QWidget>
+#include <QLineEdit>
+#include <QDoubleSpinBox>
+
 #include "type_defs.h"
 #include "canvas.h"
 #include "undo.h"
@@ -97,6 +102,8 @@ struct AutomationObject {
   //QRect currentVertexRect;
   //int currentTick;
   //int currentYNorm;
+
+	void setCurrentText( const QString& parameter, int frame, double value );
 };
 
 //---------------------------------------------------------
@@ -249,6 +256,57 @@ class PartCanvas : public Canvas {
       void setCurrentColorIndex(int idx);
 };
 
+class ADDSpinBox : public QSpinBox {
+	Q_OBJECT
+	
+public:
+	explicit ADDSpinBox( QWidget *pParent );
+	~ADDSpinBox();
+
+signals:
+	void returnPressed();
+
+private slots:
+	void keyPressEvent( QKeyEvent* ev ) override;
+};
+
+class ADDDoubleSpinBox : public QDoubleSpinBox {
+	Q_OBJECT
+	
+public:
+	explicit ADDDoubleSpinBox( QWidget *pParent );
+	~ADDDoubleSpinBox();
+
+signals:
+	void returnPressed();
+
+private slots:
+	void keyPressEvent( QKeyEvent* ev ) override;
+};
+
+class AutomationAdjustmentDialog : public QDialog {
+	Q_OBJECT
+
+public:
+	explicit AutomationAdjustmentDialog( QWidget *pParent, double value, int frame, double minValue, double maxValue, double stepSize );
+	~AutomationAdjustmentDialog();
+
+	double getValue() const;
+	int getFrame() const;
+
+private:
+	ADDSpinBox* m_pFrameSpinBox;
+	ADDDoubleSpinBox* m_pValueDoubleSpinBox;
+};
+
+inline double AutomationAdjustmentDialog::getValue() const {
+	return m_pValueDoubleSpinBox->value();
+}
+
+inline int AutomationAdjustmentDialog::getFrame() const {
+	return m_pFrameSpinBox->value();
+}
+	
 } // namespace MusEGui
 
 #endif
