@@ -247,8 +247,8 @@ Arranger::Arranger(ArrangerView* parent, const char* name)
 
       _canvasXOrigin = DefaultCanvasXOrigin;
       //_minXMag = -2000;
-      _minXMag = -500;
-      _maxXMag = -5;
+      _minXMag = -5000;
+      _maxXMag = -1;
       QList<Rasterizer::Column> rast_cols;
       rast_cols <<
         Rasterizer::TripletColumn <<
