@@ -251,13 +251,13 @@ GlobalConfigValues config = {
       18,                           // iconSize
       18,                           // cursorSize (for custom cursors)
       true,                         // cascadeStylesheets
-      true,                         // showIconsInMenus
+      true,                         // showIconsInMneus
       true,                         // useNativeStandardDialogs
       16,                           // trackGradientStrength
       64,                           // partGradientStrength
       
       false,                        // enableAlsaMidiDriver Whether to enable the ALSA midi driver
-      384,                          // division;
+      6000,                          // division;
       1024,                         // rtcTicks
       0,                            // curMidiSyncInPort The currently selected midi sync input port.
       true,                         // midiSendInit Send instrument initialization sequences
@@ -274,7 +274,7 @@ GlobalConfigValues config = {
       QString(""),                  // userInstrumentsDir  // Obsolete. Must keep for compatibility.
       //QString(""),                // helpBrowser; // Obsolete
       true,                         // extendedMidi
-      384,                          // division for smf export
+      6000,                          // division for smf export
       QString(""),                  // copyright string for smf export
       1,                            // smf export file format
       false,                        // midi export file 2 byte timesigs instead of 4
